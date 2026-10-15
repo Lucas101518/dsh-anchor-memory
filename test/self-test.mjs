@@ -268,6 +268,29 @@ try {
 }
 ok(directOk, 'ctx.inject 缺失时不抛错（退回直接注册）')
 
+// ★ 回归守卫：Cordis 不允许访问没在 inject 里声明的服务 —— 直接摸 ctx.tools 会抛
+//   'cannot get property "tools" without inject'，导致整个插件激活失败（插件页显示"异常"）。
+//   用一个会抛错的 ctx 模拟该规则，确保 apply 绝不直接访问 ctx.tools。
+{
+  const { ctx: strictCtx, captured: strictCap } = makeCtx()
+  const guarded = new Proxy(strictCtx, {
+    get(target, key) {
+      if (key === 'tools') throw new Error('cannot get property "tools" without inject')
+      return target[key]
+    },
+  })
+  let guardOk = true
+  let guardErr = ''
+  try {
+    plugin.apply(guarded, { memoryDir: rootA })
+  } catch (e) {
+    guardOk = false
+    guardErr = e?.message ?? String(e)
+  }
+  ok(guardOk, `apply 不直接访问未声明的 ctx.tools（否则 Cordis 抛错）${guardErr ? ` → ${guardErr}` : ''}`)
+  ok(strictCap.tools.length === 4, '在"禁止直接访问 tools"前提下仍通过 ctx.inject 注册了 4 个工具')
+}
+
 /* ---------------- 2. 检索 / 读取 ---------------- */
 console.log('\n2) memory_search / memory_read')
 const tool = (name) => captured.tools.find((t) => t.name === name)
