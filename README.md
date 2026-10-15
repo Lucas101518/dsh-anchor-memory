@@ -68,7 +68,7 @@ dsh plugin --profile <profile> add "github:Lucas101518/dsh-anchor-memory#<commit
 |---|---|---|---|
 | my-app | `projects/my-app.md` | `D:\code\my-app` | 构建, 部署, 踩坑 |
 
-## 3. 最近短期记忆（滚动保留 3 条）
+## 3. 最近短期记忆（滚动保留 5 条，可用 `sessionRows` 调整）
 
 | 日期 | 文件 | 一句话 |
 |---|---|---|
@@ -142,6 +142,9 @@ tags: [构建, 部署]
 | `searchMaxChars` | `3000` | 检索输出字符上限 |
 | `readMaxChars` | `12000` | 整文件读取的字符上限 |
 | `order` | `55` | 注入段在系统提示词里的排序 |
+| `versioning` | `auto` | 版本保留：`auto`（有 `.git` 就提交，否则只做写前快照）/ `git` / `snapshot` / `off` |
+| `historyMax` | `20` | 每个文件保留最近多少份写前快照（在 `_meta/history/`） |
+| `sessionRows` | `5` | INDEX「最近短期记忆」表滚动保留几条 |
 
 ```yaml
 - insert:
@@ -172,6 +175,35 @@ dsh --profile web --patch ./dev/cordis.yml --dump-config-schema
 
 > ⚠️ **不要**在 DSH 运行期间手工编辑 profile 的 `cordis.patch.yml`：若该 profile 是 `patchReload: live`，
 > HMR 会重载，可能导致会话内工具消失 / 在途回合被杀。开发期请用 `dev/cordis.yml` + `--patch`。
+
+## 升级、卸载与数据安全
+
+**记忆数据永远不在插件包里。** 数据是 `$DSH_HOME/memory` 下的纯 markdown 文件，插件代码在
+`<profile>/node_modules/dsh-anchor-memory`。所以**升级、卸载、重装插件都不会碰到你已经存的记忆** ——
+插件运行时不写自己的包目录，也**从不删除用户的 `.md`**（唯一的删除动作是清理 `_meta/history/` 里的过期快照）。
+
+在此之上还有两层版本保留，**每次写入都自动生效**：
+
+| 机制 | 说明 |
+|---|---|
+| **写前快照** | 旧内容先写进 `_meta/history/<文件>.<毫秒时间戳>.md`，每个文件保留最近 `historyMax`（默认 20）份。**零依赖零配置** —— 没装 git 的用户也自动获得这层保护 |
+| **git 自动提交** | 记忆库若有 `.git`（在记忆库里 `git init` 即可），每次写入后自动提交，信息形如 `memory: update projects/x.md#anchor`（`-c user.name=memory`，不需要全局 git 身份） |
+
+回滚：
+
+```bash
+git -C "$DSH_HOME/memory" log --oneline              # 找到目标提交
+git -C "$DSH_HOME/memory" revert <sha>               # 整次撤销
+git -C "$DSH_HOME/memory" checkout <sha> -- <文件>    # 只恢复某个文件
+# 没有 git 时：直接从 memory/_meta/history/ 复制旧版本回去
+```
+
+**跨版本兼容策略**：解析层（锚点 `{#x}`、`## 目录` 表、`updated`）对格式差异容错；新版本只**追加**可选字段/小节，
+不改已有格式；将来若必须改格式，新版先读 `_meta/format.json` 的 `formatVersion` 判断，**不自动重写用户文件**。
+安装/升级阶段（`apply()`）除了追加一行诊断日志到 `_meta/plugin.log`，**不写任何用户记忆文件**（自测里有专门断言）。
+
+**备份建议**：① 记忆库 `git init`（本插件会自动提交）；② 定期把整个 `memory/` 复制到云盘或另一台机器；
+③ `git push` 到私有仓库。目录本身就是可移植的 markdown 树，复制到新机器同一路径即可用。
 
 ## 兼容性与边界
 

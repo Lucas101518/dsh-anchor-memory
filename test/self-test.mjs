@@ -7,7 +7,8 @@
  * 想拿真实记忆库跑回归：设置 ANCHOR_MEMORY_ROOT 指向它（脚本会先复制一份副本再操作，不会改原件）。
  */
 
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import * as plugin from '../lib/index.js'
@@ -258,6 +259,38 @@ plugin.apply(ctx3, { memoryDir: rootA })
 ok(cap3.warnings.some((w) => w.includes('systemPrompt 服务不可用')), 'systemPrompt 缺失时只警告、工具仍注册')
 ok(cap3.tools.length === 4, 'systemPrompt 缺失时工具仍注册')
 
+/* ---------------- 1b. 升级安全：apply() 绝不改动记忆库 ---------------- */
+console.log('\n1b) 升级安全（安装/升级插件本身不动数据）')
+{
+  const rootU = tmpCopy('upgrade-safety')
+  const treeOf = (dir) => {
+    const out = {}
+    const walk = (d) => {
+      for (const e of readdirSync(d, { withFileTypes: true })) {
+        const p = join(d, e.name)
+        if (e.isDirectory()) walk(p)
+        else out[p.slice(rootU.length)] = readFileSync(p, 'utf8')
+      }
+    }
+    walk(dir)
+    return out
+  }
+  const before = treeOf(rootU)
+  const { ctx: cU, captured: capU } = makeCtx()
+  plugin.apply(cU, { memoryDir: rootU })
+  const after = treeOf(rootU)
+  const userFiles = (t) => Object.fromEntries(Object.entries(t).filter(([k]) => !k.includes('_meta')))
+  ok(JSON.stringify(userFiles(before)) === JSON.stringify(userFiles(after)), 'apply() 不改动任何用户记忆文件（升级插件 = 只换代码）')
+  const changed = Object.keys(after).filter((k) => before[k] !== after[k])
+  ok(changed.every((k) => k.includes('_meta')), `apply() 唯一可能写的是 _meta 诊断日志（实际变化：${changed.join(', ') || '无'}）`)
+  ok(capU.tools.length === 4, 'apply() 依旧注册 4 个工具')
+  ok(
+    readFileSync(join(rootU, 'projects/demo.md'), 'utf8') === before['\\projects\\demo.md'] ||
+      readFileSync(join(rootU, 'projects/demo.md'), 'utf8') === before['/projects/demo.md'],
+    '项目文件内容逐字节未变',
+  )
+}
+
 // ctx.inject 缺失时退回直接注册
 const direct = { logger: { info() {}, warn() {} }, systemPrompt: { section: () => () => {} }, tools: { register: () => {} } }
 let directOk = true
@@ -380,16 +413,54 @@ ok(rowsBefore >= 1, `写入前「最近短期记忆」有 ${rowsBefore} 行`)
 const s1 = await write.execute({ slug: 'self-test', summary: '自测写入的短期记忆', body: '## 做了什么\n- 跑自测', mode: 'session' })
 ok(s1.includes('已写入短期记忆') && s1.includes('已更新'), `session 模式 → ${s1}`)
 ok(existsSync(join(rootA, 'sessions', `${localDate()}-self-test.md`)), '短期记忆文件已创建')
-ok(sessionRows() === Math.min(rowsBefore + 1, 3), `写入后表里有 ${sessionRows()} 行`)
+ok(sessionRows() === Math.min(rowsBefore + 1, 5), `写入后表里有 ${sessionRows()} 行`)
 ok(sessionOrder()[0].includes('自测写入的短期记忆'), '新行插在表首（最新的在最上面）')
 ok((await write.execute({ mode: 'session', summary: '', body: 'x' }).catch((e) => e.message)).includes('缺少 summary'), 'session 缺 summary 报错')
 
-for (let i = 0; i < 4; i++) {
+for (let i = 0; i < 6; i++) {
   await write.execute({ slug: `roll-${i}`, summary: `滚动测试 ${i}`, body: '- x', mode: 'session' })
 }
-ok(sessionRows() === 3, `滚动保留 3 行（实际 ${sessionRows()}）`)
-ok(sessionOrder()[0].includes('滚动测试 3'), '滚动后表首是最新一条')
+ok(sessionRows() === 5, `滚动保留 5 行（实际 ${sessionRows()}）`)
+ok(sessionOrder()[0].includes('滚动测试 5'), '滚动后表首是最新一条')
 ok(!sessionOrder().join('|').includes('滚动测试 0'), '被滚出去的最旧条目已被移除')
+ok(!sessionOrder().join('|').includes('fixture 的初始短期记忆'), 'fixture 最初的条目也被滚出（上限确实生效）')
+
+/* ---------------- 4b. 版本保留：写前快照 + git 提交 ---------------- */
+console.log('\n4b) 版本保留（保证"更新记忆不丢内容"）')
+const histDir = join(rootA, '_meta', 'history')
+const snaps = () => (existsSync(histDir) ? readdirSync(histDir) : [])
+ok(snaps().length > 0, `写入后产生了写前快照（${snaps().length} 份，在 _meta/history/）`)
+ok(snaps().some((f) => f.startsWith('INDEX.md.')), 'INDEX.md 的快照存在')
+ok(snaps().some((f) => f.startsWith('projects__demo.md.')), '项目文件的快照存在（斜杠被编码成 __）')
+const snapText = readFileSync(join(histDir, snaps().find((f) => f.startsWith('projects__demo.md.'))), 'utf8')
+ok(snapText.includes('## 目录'), '快照内容是写之前的旧版本（含目录表）')
+ok(snapText !== readFileSync(join(rootA, 'projects/demo.md'), 'utf8'), '快照与当前版本不同（确实保留了旧内容）')
+// 快照上限：写很多次后每个文件只留 historyMax 份
+for (let i = 0; i < 6; i++) {
+  await write.execute({ file: 'projects/demo.md', title: '自测小节', body: `- 第 ${i} 次覆盖` })
+}
+const demoSnaps = snaps().filter((f) => f.startsWith('projects__demo.md.'))
+ok(demoSnaps.length <= 20, `单文件快照数量被限制在 historyMax 内（当前 ${demoSnaps.length}）`)
+// git 提交：在临时目录里建一个仓库验证
+const gitDir = join(work, 'gitcheck')
+mkdirSync(gitDir, { recursive: true })
+writeFileSync(join(gitDir, 'a.md'), 'v1\n', 'utf8')
+const gitInit = spawnSync('git', ['-C', gitDir, 'init', '-q'], { windowsHide: true })
+if (!gitInit.error && gitInit.status === 0) {
+  const committed = plugin.gitCommit(gitDir, 'memory: test commit')
+  ok(committed === true, 'gitCommit 在有 .git 的目录里成功创建提交')
+  const log = spawnSync('git', ['-C', gitDir, 'log', '--oneline'], { encoding: 'utf8', windowsHide: true })
+  ok((log.stdout ?? '').includes('memory: test commit'), '提交信息可在 git log 里查到')
+} else {
+  console.log('  - 跳过 git 断言（本机没有可用的 git）')
+}
+ok(plugin.gitCommit(join(work, 'no-git-here'), 'x') === false, '没有 .git 的目录里 gitCommit 返回 false（不抛错）')
+// 格式版本标记 + 大幅缩短提示
+ok(existsSync(join(rootA, '_meta', 'format.json')), '首次写入创建了格式版本标记 _meta/format.json')
+ok(/"formatVersion":\s*1/.test(readFileSync(join(rootA, '_meta', 'format.json'), 'utf8')), '格式标记里写了 formatVersion: 1')
+await write.execute({ file: 'projects/demo.md', title: '自测小节', body: `- 长内容 ${'x'.repeat(1500)}` })
+const small = await write.execute({ file: 'projects/demo.md', title: '自测小节', body: '- 短' })
+ok(small.includes('缩短'), `大幅缩短时给出回滚提示 → ${small.slice(-90)}`)
 
 /* ---------------- 5. INDEX 硬上限守卫 ---------------- */
 console.log('\n5) INDEX 硬上限守卫')
@@ -417,6 +488,8 @@ ok(st.includes('记忆库：') && st.includes('INDEX.md：') && st.includes('注
 ok(st.includes('section 已注册'), 'status 确认注入段已注册')
 ok(/≈\d+ token/.test(st), 'status 给出 token 估算')
 ok(st.includes('memory_search') && st.includes('memory_write'), 'status 列出四个工具')
+ok(st.includes('升级安全') && st.includes('插件包之外'), 'status 声明"升级/卸载不改动数据"')
+ok(st.includes('版本保留'), 'status 报告版本保留状态（git / 快照数 / 格式版本）')
 
 /* ---------------- 收尾 ---------------- */
 rmSync(work, { recursive: true, force: true })

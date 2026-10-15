@@ -24,8 +24,12 @@ description: markdown 长期记忆库（默认 $DSH_HOME/memory）的操作手�
     —— 自动补目录表行、编号、锚点，并刷新 frontmatter 的 `updated`。同标题（或同 anchor）再写 = 更新该节，不会重复加行。
   - 用户级偏好/红线 → `memory_write({file:"profile/CONVENTIONS.md"|"profile/REDLINES.md", title, body})`（这类文件没有目录表，用二级标题）。
   - 本次会话的工作记忆 → `memory_write({mode:"session", slug:"...", summary:"一句话", body:"..."})`
-    —— 写 `sessions/<日期>-<slug>.md` 并滚动更新 INDEX 的「最近短期记忆」表（只留 3 条）。
+    —— 写 `sessions/<日期>-<slug>.md` 并滚动更新 INDEX 的「最近短期记忆」表（默认只留 5 条）。
   - 拿不准的 → `memory_write({file:"inbox.md", mode:"append", body:"..."})`，用户确认后再升格。
+- **更新记忆不会丢内容**：每次写入前会把旧版本快照到 `_meta/history/<文件>.<时间戳>.md`（每文件保留最近 20 份），
+  且记忆库若已 `git init`，每次写入后自动 commit（`_meta/history` 之外的全部改动）。要回滚：
+  `git -C <记忆库> log --oneline` 找到那次提交 → `git revert <sha>`（或 `git checkout <sha> -- <文件>`）；
+  没有 git 时直接从 `_meta/history/` 复制旧版本回去。
 - 结论被推翻时：**改原条目**并标注 `superseded`，不要并列留两条相反的结论。
 
 ## INDEX 预算（硬上限）
