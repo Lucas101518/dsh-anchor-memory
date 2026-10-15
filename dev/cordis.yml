@@ -1,0 +1,18 @@
+# 开发用覆盖层（--patch）：完全不碰 profile，也不会触发 HMR。
+#
+# 从仓库根目录运行（路径是 patch 文件相对的，不用改成绝对路径）：
+#
+#   1) 只组合、不启动（确认 patch 层插进来了）：
+#      dsh --profile web --patch ./dev/cordis.yml --dump-config
+#
+#   2) 校验 import / Config 能否解析（会真的 import 模块）：
+#      dsh --profile web --patch ./dev/cordis.yml --dump-config-schema
+#
+#   3) 起独立进程真的跑一次（需要模型可用）：
+#      dsh --profile web --patch ./dev/cordis.yml "调用 memory_status 工具，把结果原样贴出来"
+#
+# 注：`dsh` 在 Windows 上通常不在 PATH，实际路径形如
+#     <DSH 安装目录>\resources\runtime\cli\bin\dsh.cmd
+- insert:
+    - id: dsh-anchor-memory
+      name: '../lib/index.js'

@@ -1,0 +1,56 @@
+{
+  "name": "dsh-anchor-memory",
+  "version": "0.1.0",
+  "description": "基于 markdown 文件的长期记忆（DSH host 插件）：自动注入记忆索引，提供 memory_status/search/read/write 工具，写入时自动维护「目录 + 锚点」，检索只读命中那一节，并守住索引预算硬上限。零依赖。",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./package.json": "./package.json",
+    "./cordis.patch.yml": "./cordis.patch.yml"
+  },
+  "files": [
+    "lib",
+    "skill",
+    "cordis.patch.yml",
+    "icon.svg",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "engines": {
+      "dsh": ">=0.1.1-rc.1"
+    }
+  },
+  "icon": "./icon.svg",
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek",
+    "deepseek-harness",
+    "memory",
+    "long-term-memory",
+    "markdown",
+    "context",
+    "token-efficiency"
+  ],
+  "license": "MIT",
+  "author": "Lucas (Lucas101518)",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Lucas101518/dsh-anchor-memory.git"
+  },
+  "homepage": "https://github.com/Lucas101518/dsh-anchor-memory#readme",
+  "bugs": {
+    "url": "https://github.com/Lucas101518/dsh-anchor-memory/issues"
+  },
+  "scripts": {
+    "test": "node test/self-test.mjs"
+  }
+}

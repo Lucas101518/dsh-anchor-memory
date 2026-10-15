@@ -1,0 +1,15 @@
+# 依赖与构建产物
+node_modules/
+package-lock.json
+
+# 插件写文件时的临时文件（同目录原子替换）
+*.tmp-anchor-memory
+
+# 本地开发/验证用沙箱
+.sandbox/
+.probe-home/
+
+# 杂项
+*.log
+.DS_Store
+Thumbs.db
