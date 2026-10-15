@@ -28,17 +28,25 @@
 ## 安装
 
 ```bash
-# 1) npm（推荐，可被 dsh plugin 管理）
-dsh plugin --profile <profile> add dsh-anchor-memory
-
-# 2) GitHub（pin 到 commit）
+# 1) GitHub（推荐；pin 到 commit 更稳）
+dsh plugin --profile <profile> add "github:Lucas101518/dsh-anchor-memory"
+#    或固定版本：
 dsh plugin --profile <profile> add "github:Lucas101518/dsh-anchor-memory#<commit-sha>"
 
-# 3) 本地目录（开发期）
+# 2) 本地目录（开发/离线）
 #    应用内「设置 → 插件 → 添加插件」→ 输入本仓库的绝对路径
+#    或：dsh plugin --profile <profile> add /path/to/dsh-anchor-memory
+
+# 3) npm —— 作者暂未发布到 npm（`npm view dsh-anchor-memory` 会 404），
+#    发布后这条才可用：
+#    dsh plugin --profile <profile> add dsh-anchor-memory
 ```
 
 装完**重启 DSH**。（本插件自带 `dsh.bundle.patch`，属于 bundle 类插件，行要重启才挂上。）
+
+> 注意：DSH 的插件安装走 pnpm，而 pnpm 有 **24 小时供应链冷却期**（`minimumReleaseAge`）——
+> 刚发布的包可能被 `ERR_PNPM_MINIMUM_RELEASE_AGE_VIOLATION` 拦下，等冷却过去或把该版本加进
+> profile 的 `pnpm-workspace.yaml` → `minimumReleaseAgeExclude` 即可。
 
 ## 3 分钟上手
 
