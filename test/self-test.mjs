@@ -213,6 +213,23 @@ for (const t of captured.tools) {
     t.output && typeof t.output.render === 'function' &&
     typeof t.execute === 'function'
   ok(shapeOk, `工具 ${t.name} 形状合法（description/parameters/output.render/execute）`)
+  // 回归守卫：parameters 必须是合法 JSON Schema（顶层 type: 'object'）。
+  // 简写映射（{file:{type:'string'}}）会让模型服务端拒绝每一次请求（INVALID_REQUEST）。
+  ok(
+    t.parameters.type === 'object' &&
+      typeof t.parameters.properties === 'object' &&
+      !Array.isArray(t.parameters.properties) &&
+      (t.parameters.required === undefined || Array.isArray(t.parameters.required)),
+    `工具 ${t.name} 的 parameters 是合法 JSON Schema（type: object + properties）`,
+  )
+  ok(
+    Object.values(t.parameters.properties ?? {}).every((p) => typeof p?.type === 'string' && typeof p?.description === 'string'),
+    `工具 ${t.name} 的每个参数都有 type 与 description（模型才知道怎么填）`,
+  )
+  ok(
+    (t.parameters.required ?? []).every((k) => k in (t.parameters.properties ?? {})),
+    `工具 ${t.name} 的 required 都是已声明的属性`,
+  )
   const blocks = t.output.render({}, 'sample')
   ok(Array.isArray(blocks) && blocks[0]?.type === 'text', `工具 ${t.name} 的 render 返回 ContentBlock[]`)
 }
