@@ -1,6 +1,6 @@
 {
   "name": "dsh-anchor-memory",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "基于 markdown 文件的长期记忆（DSH host 插件）：自动注入记忆索引，提供 memory_status/search/read/write 工具，写入时自动维护「目录 + 锚点」，检索只读命中那一节，并守住索引预算硬上限。零依赖。",
   "type": "module",
   "main": "lib/index.js",
